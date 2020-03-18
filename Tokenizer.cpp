@@ -25,6 +25,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <string>
 #include <list>
 #include <stack>
@@ -32,7 +33,7 @@
 
 using namespace std;
 
-#include "Token.h"
+#include "Tokenizer.h"
 
 
 // parse the rest of a symbol
@@ -378,49 +379,49 @@ bool token_parser::tokenize() {
 			do
 			{
 				// Remove any comments from the source
-				if (input_char == '/') {
-					int peek_character = source_stream.peek();
-					if (peek_character == '/') {
-						// Remove the line comment
-						while (peek_character != 0x0A && !source_stream.eof()) {
-							peek_character = source_stream.get();
-						}
-						token = new(nothrow) eol_token;
-						break;
-					}
-					if (peek_character == '*') {
-						// Remove a block comment
-						while (true) {
-							peek_character = source_stream.get();
-							if (peek_character == -1) {
-								cout << "error: block comment not terminated before EOF" << endl;
-								exit(0);
-							}
-							if (peek_character == 0x0A) {
-								token = new(nothrow) eol_token;
-								// Add the token to the end of the list
-								token_list.push_back(token);
-								continue;
-							}
-							if (peek_character == '*') {
-								peek_character = source_stream.get();
-								if (peek_character == -1) {
-									cout << "error: block comment not terminated before EOF" << endl;
-									exit(0);
-								}
-								if (peek_character == '/') {
-									// We need to ensure that a whitespace token
-									// is created to ensure /* */ in the middle
-									// of a source line is processed correctly.
-									input_char = source_stream.get();
-									input_char = ' ';
-									token = new(nothrow) whitespace_token;
-									break;
-								}
-							}
-						}
-					}
-				}
+				//if (input_char == '/') {
+				//	int peek_character = source_stream.peek();
+				//	if (peek_character == '/') {
+				//		// Remove the line comment
+				//		while (peek_character != 0x0A && !source_stream.eof()) {
+				//			peek_character = source_stream.get();
+				//		}
+				//		token = new(nothrow) eol_token;
+				//		break;
+				//	}
+				//	if (peek_character == '*') {
+				//		// Remove a block comment
+				//		while (true) {
+				//			peek_character = source_stream.get();
+				//			if (peek_character == -1) {
+				//				cout << "error: block comment not terminated before EOF" << endl;
+				//				exit(0);
+				//			}
+				//			if (peek_character == 0x0A) {
+				//				token = new(nothrow) eol_token;
+				//				// Add the token to the end of the list
+				//				token_list.push_back(token);
+				//				continue;
+				//			}
+				//			if (peek_character == '*') {
+				//				peek_character = source_stream.get();
+				//				if (peek_character == -1) {
+				//					cout << "error: block comment not terminated before EOF" << endl;
+				//					exit(0);
+				//				}
+				//				if (peek_character == '/') {
+				//					// We need to ensure that a whitespace token
+				//					// is created to ensure /* */ in the middle
+				//					// of a source line is processed correctly.
+				//					input_char = source_stream.get();
+				//					input_char = ' ';
+				//					token = new(nothrow) whitespace_token;
+				//					break;
+				//				}
+				//			}
+				//		}
+				//	}
+				//}
 				if (isalpha(input_char) || input_char == '_') {
 					// Start of a symbol sequence
 					token = new(nothrow) symbol_token;
@@ -457,9 +458,15 @@ bool token_parser::tokenize() {
 					break;
 				}
 			} while (false);
-			if (token == NULL) return false;
+
+			if (token == nullptr) 
+				return false;
+
+			token->set_pos((size_t)source_stream.tellg() - 1);
 			input_char = token->parse_token(source_stream, input_char);
+
 			// Add the token to the end of the list
+			// (ignore whitespaces and EOL for better performance when parsing)
 			if ((token->type() != base_token::t_whitespace)
 				&& (token->type() != base_token::t_eol))
 				token_list.push_back(token);
@@ -468,36 +475,25 @@ bool token_parser::tokenize() {
 	}
 	// Add the EOF token to the end of the list
 	token = new(nothrow) eof_token;
-	token_list.push_back(token);
+	if (token != nullptr)
+		token_list.push_back(token);
 
 	node_iterator = token_list.begin();
 	return true;
 }
 
-
-//t_invalid_token = 0, t_symbol,
-//t_integer, t_literal,
-//t_const_literal, t_punctuation,
-//t_whitespace, t_eol, t_eof
-
 void token_parser::parse()
 {
-	list<base_token*>::iterator iter;
-	iter = token_list.begin();
 	int id = 1;
 
-	list<node*> node_list;
-	stack<node*> node_stack;
-
 	node* root = new node(id);
-
-	node_list.push_back(root);
 	node* tmp_node = root;
 	node* parent_node = nullptr;
 
+	node_list.push_back(root);
+
 	base_token* tok;
 	base_token* next;
-	auto node_lst_it = node_list.begin();	// first node = root
 
 	while (((tok = get_next()) != nullptr) && tok->type() != base_token::t_eof)
 	{
@@ -508,8 +504,7 @@ void token_parser::parse()
 			case base_token::t_symbol:
 				if (next == nullptr)
 				{
-					cout << "next = null. exit" << endl;
-					_exit(-1);
+					parse_error("=", "nullptr", next->get_pos());
 				}
 
 				tmp_node->set_name(val);
@@ -522,14 +517,12 @@ void token_parser::parse()
 					}
 					else
 					{
-						// not a valid token
-						cout << "no valid token 1" << endl;
+						parse_error("=", next->get_value(), next->get_pos());
 					}
 				}
 				else
 				{
-					// not a valid token
-					cout << "no valid token 2" << endl;
+					parse_error("=", next->get_value(), next->get_pos());
 				}
 				
 				continue;
@@ -541,7 +534,6 @@ void token_parser::parse()
 					{
 						node* new_elem = new node(++id);
 						new_elem->add_parent(tmp_node);
-						//new_elem->set_name(val);
 						tmp_node->add_child(new_elem);
 						node_list.push_back(new_elem);
 						parent_node = tmp_node;
@@ -550,7 +542,7 @@ void token_parser::parse()
 					}
 					else
 					{
-						cout << "no valid token 3" << endl;
+						parse_error("a symbol", next->get_value(), next->get_pos());
 					}
 				}
 				else if (val.compare("}") == 0)
@@ -561,7 +553,6 @@ void token_parser::parse()
 					{
 						node* new_elem = new node(++id);
 						new_elem->add_parent(tmp_node);
-						//new_elem->set_name(val);
 						tmp_node->add_child(new_elem);
 						node_list.push_back(new_elem);
 						tmp_node = new_elem;
@@ -584,8 +575,7 @@ void token_parser::parse()
 						}
 						else
 						{
-							// not a valid token
-							cout << "no valid token 1" << endl;
+							parse_error("{", next->get_value(), next->get_pos());
 						}
 					}
 					else if (next->type() == base_token::t_literal || next->type() == base_token::t_const_literal || next->type() == base_token::t_integer)
@@ -596,7 +586,7 @@ void token_parser::parse()
 					else 
 					{
 						// not a valid token
-						cout << "no valid token 2" << endl;
+						parse_error("{ or \"value\"", next->get_value(), next->get_pos());
 					}
 				}
 				break;
@@ -610,12 +600,20 @@ void token_parser::parse()
 				{
 					node* new_elem = new node(++id);
 					new_elem->add_parent(parent_node);
-					//new_elem->set_name(val);
 					parent_node->add_child(new_elem);
 					node_list.push_back(new_elem);
 					tmp_node = new_elem;
 					continue;
 				}
+				else if (next->type() == base_token::t_punctuation)
+				{
+					if (next->get_value().compare("}") == 0)
+					{
+						// fine, nothing to do
+						continue;
+					}
+				}
+				parse_error("symbol or }", next->get_value(), next->get_pos());
 				break;
 
 			default:
@@ -640,8 +638,13 @@ base_token* token_parser::peek_next()
 		return nullptr;
 }
 
-// Simply iterate through the list of tokens and print them to cout
-// Of course, get the token object to print itself :o)
+void token_parser::parse_error(string expected, string got, size_t pos)
+{
+	cout << "At " << pos << ": Expected '" << expected << "', got " << got << " for next token. Exit." << endl;
+	exit(-1);
+}
+
+// for debug purposes this might be useful
 void token_parser::print_tokens() {
 	list<base_token*>::iterator iterator;
 	iterator = token_list.begin();
@@ -649,4 +652,40 @@ void token_parser::print_tokens() {
 		(*iterator)->print_token();
 		++iterator;
 	}
+}
+
+void token_parser::print_file(string file_name)
+{
+	std::streambuf* coutbuf = std::cout.rdbuf();
+	ofstream out(file_name);
+
+	if (out.fail()) {
+		cout << "No file specified or error occurred during opening " << file_name << endl;
+		cout << "Output to standarf output will be used instead." << endl;
+	}
+	else
+	{
+		std::cout.rdbuf(out.rdbuf());
+	}
+	
+	// print to file/console
+	auto n_it = node_list.begin();
+	while (n_it != node_list.end())
+	{
+		std::cout << (*n_it++)->to_string();
+	}
+
+	std::cout.rdbuf(coutbuf);
+}
+
+string node::to_string()
+{
+	// format (node_id, parent_id, name, data) => (1, 0, shape, )
+	std::ostringstream oss;
+	oss << "(" << this->get_id() << ", " 
+		<< ((this->get_parent() != nullptr) ? this->get_parent()->get_id() : 0) << ", "
+		<< this->get_name() << ", "
+		<< this->get_data() << ")" << std::endl;
+
+	return oss.str();
 }

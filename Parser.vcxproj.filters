@@ -18,12 +18,12 @@
     <ClCompile Include="Parser.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Token.cpp">
+    <ClCompile Include="Tokenizer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Token.h">
+    <ClInclude Include="Tokenizer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
