@@ -33,6 +33,8 @@ int main(int argc, char* argv[])
 		_exit(0);
 	}
 
+	cout << "Start parsing " << input_filename << endl;
+	
 	// Create the token list
 	token_parser parser(source);
 
@@ -44,4 +46,8 @@ int main(int argc, char* argv[])
 
 	// output
 	parser.print_file(output_filename);
+
+	cout << "Parsing finished." << endl;
+
+	return 0;
 }

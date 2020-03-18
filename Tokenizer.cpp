@@ -373,9 +373,6 @@ bool token_parser::tokenize() {
 		// class to parse the rest of it (if any)
 
 		while (!source_stream.eof()) {
-			// The following do loop is there only because I hate seeing
-			// if () ... else if () ... else if () ... code!!!
-			// Hence it's a do ... while ( false ) - single shot
 			do
 			{
 				// Remove any comments from the source
@@ -422,6 +419,8 @@ bool token_parser::tokenize() {
 				//		}
 				//	}
 				//}
+
+				// use (nothrow) to prevent exceptions => instead nullptr will be returned in case of errors
 				if (isalpha(input_char) || input_char == '_') {
 					// Start of a symbol sequence
 					token = new(nothrow) symbol_token;
@@ -462,11 +461,14 @@ bool token_parser::tokenize() {
 			if (token == nullptr) 
 				return false;
 
+			// save position in stream of the current token
 			token->set_pos((size_t)source_stream.tellg() - 1);
+
+			// start parsing it
 			input_char = token->parse_token(source_stream, input_char);
 
-			// Add the token to the end of the list
-			// (ignore whitespaces and EOL for better performance when parsing)
+			// append token to the the list
+			// ignore whitespaces and EOL for better performance when parsing is done later
 			if ((token->type() != base_token::t_whitespace)
 				&& (token->type() != base_token::t_eol))
 				token_list.push_back(token);
@@ -482,18 +484,20 @@ bool token_parser::tokenize() {
 	return true;
 }
 
+// this is the part responsible for syntax analysis
 void token_parser::parse()
 {
 	int id = 1;
 
-	node* root = new node(id);
-	node* tmp_node = root;
-	node* parent_node = nullptr;
+	node* tmp_node = new node(id);		// this is the root node
+	node* parent_node = nullptr;		// will hold the parent node during parsing
 
-	node_list.push_back(root);
+	node_list.push_back(tmp_node);		// a list of parsing result
 
-	base_token* tok;
-	base_token* next;
+	base_token* tok;					// current token in token_list
+	base_token* next;					// next token in token_list
+	// In this implementation look ahead method will be used. Depending on current token
+	// and knowing the next one, some decisions are made (error handling, creation of children nodes etc.)
 
 	while (((tok = get_next()) != nullptr) && tok->type() != base_token::t_eof)
 	{
@@ -528,7 +532,7 @@ void token_parser::parse()
 				continue;
 
 			case base_token::t_punctuation:
-				if (val.compare("{") == 0)
+				if (val == "{")
 				{
 					if (next->type() == base_token::t_symbol)
 					{
@@ -545,7 +549,7 @@ void token_parser::parse()
 						parse_error("a symbol", next->get_value(), next->get_pos());
 					}
 				}
-				else if (val.compare("}") == 0)
+				else if (val == "}")
 				{
 					// go back to parent node
 					tmp_node = parent_node->get_parent();
@@ -556,19 +560,30 @@ void token_parser::parse()
 						tmp_node->add_child(new_elem);
 						node_list.push_back(new_elem);
 						tmp_node = new_elem;
+						continue;
 					}
-					else
+					else if (next->type() == base_token::t_punctuation)
 					{
-						parent_node = parent_node->get_parent();
+						if (next->get_value() == "}")
+						{
+							// go one level up for parent node
+							parent_node = parent_node->get_parent();
+							continue;
+						}
 					}
-
+					else if (next->type() == base_token::t_eof)
+					{
+						// this was the last '}' brace
+						continue;
+					}
+					
+					parse_error("a symbol or }", next->get_value(), next->get_pos());
 				}
-				else if (val.compare("=") == 0)
+				else if (val == "=")
 				{
 					if (next->type() == base_token::t_punctuation)
 					{
-						//tmp_node->set_name(val);
-						if (next->get_value().compare("{") == 0)
+						if (next->get_value() == "{")
 						{
 							// there will be a list
 							continue;
@@ -580,7 +595,7 @@ void token_parser::parse()
 					}
 					else if (next->type() == base_token::t_literal || next->type() == base_token::t_const_literal || next->type() == base_token::t_integer)
 					{
-						// there will be a value, nothing to do
+						// there will be a value
 						continue;
 					}
 					else 
@@ -607,7 +622,7 @@ void token_parser::parse()
 				}
 				else if (next->type() == base_token::t_punctuation)
 				{
-					if (next->get_value().compare("}") == 0)
+					if (next->get_value() == "}")
 					{
 						// fine, nothing to do
 						continue;
