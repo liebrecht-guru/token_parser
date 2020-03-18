@@ -2,7 +2,7 @@
 
 Basic functionality taken from [Fundamentals of Parsing](https://www.dreamincode.net/forums/topic/153718-fundamentals-of-parsing/).
 
-Parses following text:
+For example, following text:
 ```
 shape = {
 
@@ -26,7 +26,7 @@ color = { r = "0xFF"g = "0x00" b = "0x80" alpha = "0x80"} a="25"
 }
 ```
 
-with resulting output to file or standard output:
+will be parsed as output file/standard output:
 ```
 (1, 0, shape, )
 (2, 1, type, tetrahedron)
@@ -53,3 +53,8 @@ with resulting output to file or standard output:
 (23, 19, alpha, 0x80)
 (24, 1, a, 25)
 ```
+
+Whitespaces are ignored. 
+
+Usage: `parser input_file [output_file]`
+If no output file is specified, parsing result is printed to standard output.
