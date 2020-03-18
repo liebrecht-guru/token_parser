@@ -460,13 +460,17 @@ bool token_parser::tokenize() {
 			if (token == NULL) return false;
 			input_char = token->parse_token(source_stream, input_char);
 			// Add the token to the end of the list
-			token_list.push_back(token);
+			if ((token->type() != base_token::t_whitespace)
+				&& (token->type() != base_token::t_eol))
+				token_list.push_back(token);
 			continue;
 		}
 	}
 	// Add the EOF token to the end of the list
 	token = new(nothrow) eof_token;
 	token_list.push_back(token);
+
+	node_iterator = token_list.begin();
 	return true;
 }
 
@@ -478,8 +482,8 @@ bool token_parser::tokenize() {
 
 void token_parser::parse()
 {
-	list<base_token*>::iterator iterator;
-	iterator = token_list.begin();
+	list<base_token*>::iterator iter;
+	iter = token_list.begin();
 	int id = 1;
 
 	list<node*> node_list;
@@ -489,75 +493,152 @@ void token_parser::parse()
 
 	node_list.push_back(root);
 	node* tmp_node = root;
+	node* parent_node = nullptr;
 
-	while (iterator != token_list.end())
+	base_token* tok;
+	base_token* next;
+	auto node_lst_it = node_list.begin();	// first node = root
+
+	while (((tok = get_next()) != nullptr) && tok->type() != base_token::t_eof)
 	{
-		string val = (*iterator)->get_value();
-		switch ((*iterator)->type())
+		string val = tok->get_value();
+		next = peek_next();
+		switch (tok->type())
 		{
-		case base_token::t_symbol:
-			cout << "symbol ";
-			//if (tmp_node->get_parent() == nullptr)	// root element
+			case base_token::t_symbol:
+				if (next == nullptr)
+				{
+					cout << "next = null. exit" << endl;
+					_exit(-1);
+				}
+
 				tmp_node->set_name(val);
-			//else
-			{	// subnode
+
+				if (next->type() == base_token::t_punctuation)
+				{
+					if (next->get_value().compare("=") == 0)
+					{
+						continue;
+					}
+					else
+					{
+						// not a valid token
+						cout << "no valid token 1" << endl;
+					}
+				}
+				else
+				{
+					// not a valid token
+					cout << "no valid token 2" << endl;
+				}
 				
-				node* new_elem = new node(++id);
-				new_elem->add_parent(tmp_node);
-				//new_elem->set_name(val);
-				tmp_node->add_child(new_elem);
-				node_list.push_back(new_elem);
-				tmp_node = new_elem;
-			}
-			break;
+				continue;
 
-		case base_token::t_punctuation:
-			cout << "punctuation ";
-			if (val.compare("{") == 0)
-			{
-////				cout << endl << " new elem ";
-//				node* new_elem = new node(++id);
-//				new_elem->add_parent(tmp_node);
-////				new_elem->set_name(val);
-//				tmp_node->add_child(new_elem);
-//				node_list.push_back(new_elem);
-//				tmp_node = new_elem;
-			}
-			else if (val.compare("}") == 0)
-			{
-				cout << endl << " end elem ";
-				//tmp_node = node_list.back();
-			}
-			else if (val.compare("=") == 0)
-			{
-				cout << endl << " = ";
-				
-			}
-			break;
+			case base_token::t_punctuation:
+				if (val.compare("{") == 0)
+				{
+					if (next->type() == base_token::t_symbol)
+					{
+						node* new_elem = new node(++id);
+						new_elem->add_parent(tmp_node);
+						//new_elem->set_name(val);
+						tmp_node->add_child(new_elem);
+						node_list.push_back(new_elem);
+						parent_node = tmp_node;
+						tmp_node = new_elem;
+						continue;
+					}
+					else
+					{
+						cout << "no valid token 3" << endl;
+					}
+				}
+				else if (val.compare("}") == 0)
+				{
+					// go back to parent node
+					tmp_node = parent_node->get_parent();
+					if (next->type() == base_token::t_symbol)
+					{
+						node* new_elem = new node(++id);
+						new_elem->add_parent(tmp_node);
+						//new_elem->set_name(val);
+						tmp_node->add_child(new_elem);
+						node_list.push_back(new_elem);
+						tmp_node = new_elem;
+					}
+					else
+					{
+						parent_node = parent_node->get_parent();
+					}
 
-		case base_token::t_literal:
-		case base_token::t_integer:
-		case base_token::t_const_literal:
-			cout << "integer/const_/literal ";
-			node_list.back()->get_parent()->set_data(val);
-			//tmp_node->set_data(val);
-			tmp_node = node_list.back()->get_parent();
-			break;
+				}
+				else if (val.compare("=") == 0)
+				{
+					if (next->type() == base_token::t_punctuation)
+					{
+						//tmp_node->set_name(val);
+						if (next->get_value().compare("{") == 0)
+						{
+							// there will be a list
+							continue;
+						}
+						else
+						{
+							// not a valid token
+							cout << "no valid token 1" << endl;
+						}
+					}
+					else if (next->type() == base_token::t_literal || next->type() == base_token::t_const_literal || next->type() == base_token::t_integer)
+					{
+						// there will be a value, nothing to do
+						continue;
+					}
+					else 
+					{
+						// not a valid token
+						cout << "no valid token 2" << endl;
+					}
+				}
+				break;
 
-		case base_token::t_eof:
-			cout << "eof ";
-			break;
+			case base_token::t_literal:
+			case base_token::t_integer:
+			case base_token::t_const_literal:
+				tmp_node->set_data(val);
+				// if next symbol, create new elem
+				if (next->type() == base_token::t_symbol)
+				{
+					node* new_elem = new node(++id);
+					new_elem->add_parent(parent_node);
+					//new_elem->set_name(val);
+					parent_node->add_child(new_elem);
+					node_list.push_back(new_elem);
+					tmp_node = new_elem;
+					continue;
+				}
+				break;
 
-		default:
-			++iterator;
-			continue;
+			default:
+				break;
 		}
-		cout << val << endl;
-		//(*iterator)->print_token();
-		++iterator;
 	}
 }
 
+base_token* token_parser::get_next()
+{
+	if (node_iterator != token_list.end())
+		return (*node_iterator++);
+	else
+		return nullptr;
+}
+
+base_token* token_parser::peek_next()
+{
+	if ((*node_iterator) != nullptr && std::next(node_iterator, 0) != token_list.end())
+		return (*std::next(node_iterator, 0));
+	else
+		return nullptr;
+}
 
 // Simply iterate through the list of tokens and print them to cout
 // Of course, get the token object to print itself :o)

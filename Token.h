@@ -148,16 +148,16 @@ private:
 	string name;
 	string data;
 	node* parent;
-	node* children[];
+	list<node*> children;
 public:
 	node(int _id) : id(_id), parent(nullptr), child_cnt(0) { };
 	int get_id() { return id; }
 	void set_name(string s) { name = s; }
 	void set_data(string s) { data = s; }
 	void add_parent(node* n) { parent = n; }
-	void add_child(node* n) { children[child_cnt++] = n; }
+	void add_child(node* n) { children.push_back(n); }
 	node* get_parent() { return parent; }
-	node** get_children() { return children; }
+	list<node*> get_children() { return children; }
 };
 
 // The C++ token parser
@@ -166,8 +166,11 @@ class token_parser
 private:
 	fstream& source_stream;
 	list<base_token*> token_list;
+	list<base_token*>::iterator node_iterator;
 public:
 	token_parser(fstream& stream) : source_stream(stream) { };
+	base_token* get_next();
+	base_token* peek_next();
 	bool tokenize();
 	void parse();
 	void print_tokens();
