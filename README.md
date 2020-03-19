@@ -1,8 +1,9 @@
 # simple parser
 
-Basic functionality taken from [Fundamentals of Parsing](https://www.dreamincode.net/forums/topic/153718-fundamentals-of-parsing/).
+Basic functionality for token analyzer taken from [Fundamentals of Parsing](https://www.dreamincode.net/forums/topic/153718-fundamentals-of-parsing/).
+Reworked for use with smart pointers.
 
-For example, following text:
+Added grammer for following hierarchical data structure:
 ```
 shape = {
 
@@ -26,7 +27,7 @@ color = { r = "0xFF"g = "0x00" b = "0x80" alpha = "0x80"} a="25"
 }
 ```
 
-will be parsed as output file/standard output:
+Resulting output:
 ```
 (1, 0, shape, )
 (2, 1, type, tetrahedron)
