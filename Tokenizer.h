@@ -150,21 +150,21 @@ private:
 	int id;
 	string name;
 	string data;
-	node* parent;
-	list<node*> children;
+	shared_ptr<node> parent;
+	list<shared_ptr<node> > children;
 public:
 	node(int _id) : id(_id), parent(nullptr) { };
 	int get_id() { return id; }
 	void set_name(string s) { name = s; }
 	void set_data(string s) { data = s; }
-	void add_parent(node* n) { parent = n; }
-	void add_child(node* n) { children.push_back(n); }
+	void add_parent(shared_ptr<node> n) { parent = n; }
+	void add_child(shared_ptr<node> n) { children.push_back(n); }
 
 	string get_data() { return data; }
 	string get_name() { return name; }
 
-	node* get_parent() { return parent; }
-	list<node*> get_children() { return children; }
+	shared_ptr<node> get_parent() { return parent; }
+	list<shared_ptr<node> > get_children() { return children; }
 	string to_string();
 };
 
@@ -173,13 +173,13 @@ class token_parser
 {
 private:
 	fstream& source_stream;
-	list<base_token*> token_list;
-	list<base_token*>::iterator node_iterator;
-	list<node*> node_list;
+	list<shared_ptr<base_token> > token_list;
+	list<shared_ptr<base_token> >::iterator node_iterator;
+	list<shared_ptr<node> > node_list;
 public:
 	token_parser(fstream& stream) : source_stream(stream) { };
-	base_token* get_next();
-	base_token* peek_next();
+	shared_ptr<base_token> get_next();
+	shared_ptr<base_token> peek_next();
 	void parse_error(string expected, string got, size_t pos);
 	bool tokenize();
 	void parse();

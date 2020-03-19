@@ -72,6 +72,15 @@ int integer_token::parse_token(fstream& stream, int input_char) {
 				return input_char;
 			}
 		}
+		else
+		{
+			// if no space after a number, then symbol is illegal
+			if (input_char != ' ' && input_char != 0x09 && input_char != 0x0B && input_char != 0x0D)
+			{
+				cout << (size_t)stream.tellg() - 1 << ": Illegal symbol. Exit." << endl;
+				exit(-1);
+			}
+		}
 	}
 	while (true) {
 		input_char = stream.get();
@@ -363,7 +372,7 @@ void invalid_token::print_token(void) {
 
 // parse the input source
 bool token_parser::tokenize() {
-	base_token* token = nullptr;
+	shared_ptr<base_token> token;
 
 	while (!source_stream.eof()) {
 		int input_char = source_stream.get();
@@ -423,37 +432,37 @@ bool token_parser::tokenize() {
 				// use (nothrow) to prevent exceptions => instead nullptr will be returned in case of errors
 				if (isalpha(input_char) || input_char == '_') {
 					// Start of a symbol sequence
-					token = new(nothrow) symbol_token;
+					token = make_shared<symbol_token>();
 					break;
 				}
 				if (input_char == 0x0A) {
 					// EOL
-					token = new(nothrow) eol_token;
+					token = make_shared<eol_token>();
 					break;
 				}
 				if (isspace(input_char)) {
 					// Start of whitespace sequence
-					token = new(nothrow) whitespace_token;
+					token = make_shared<whitespace_token>();
 					break;
 				}
 				if (input_char == '\"') {
 					// Start of literal sequence
-					token = new(nothrow) literal_token;
+					token = make_shared<literal_token>();
 					break;
 				}
 				if (input_char == '\'') {
 					// Start of constant literal sequence
-					token = new(nothrow) const_literal_token;
+					token = make_shared<const_literal_token>();
 					break;
 				}
 				if (isdigit(input_char)) {
 					// Start of number sequence
-					token = new(nothrow) integer_token;
+					token = make_shared<integer_token>();
 					break;
 				}
 				if (ispunct(input_char)) {
 					// Start of punctuation sequence
-					token = new(nothrow) punctuation_token;
+					token = make_shared<punctuation_token>();
 					break;
 				}
 			} while (false);
@@ -476,7 +485,7 @@ bool token_parser::tokenize() {
 		}
 	}
 	// Add the EOF token to the end of the list
-	token = new(nothrow) eof_token;
+	token = make_shared<eof_token>();
 	if (token != nullptr)
 		token_list.push_back(token);
 
@@ -489,13 +498,15 @@ void token_parser::parse()
 {
 	int id = 1;
 
-	node* tmp_node = new node(id);		// this is the root node
-	node* parent_node = nullptr;		// will hold the parent node during parsing
+	//node* parent_node = new node(id);		// this is the root node
+	shared_ptr<node> parent_node(new node(id));
+	//node* tmp_node = parent_node;			// will hold the parent node during parsing
+	shared_ptr<node> tmp_node = parent_node;
 
 	node_list.push_back(tmp_node);		// a list of parsing result
 
-	base_token* tok;					// current token in token_list
-	base_token* next;					// next token in token_list
+	shared_ptr<base_token> tok;					// current token in token_list
+	shared_ptr<base_token> next;					// next token in token_list
 	// In this implementation look ahead method will be used. Depending on current token
 	// and knowing the next one, some decisions are made (error handling, creation of children nodes etc.)
 
@@ -536,7 +547,7 @@ void token_parser::parse()
 				{
 					if (next->type() == base_token::t_symbol)
 					{
-						node* new_elem = new node(++id);
+						shared_ptr<node> new_elem (new node(++id));
 						new_elem->add_parent(tmp_node);
 						tmp_node->add_child(new_elem);
 						node_list.push_back(new_elem);
@@ -552,15 +563,23 @@ void token_parser::parse()
 				else if (val == "}")
 				{
 					// go back to parent node
-					tmp_node = parent_node->get_parent();
+					if (tmp_node != parent_node)
+						tmp_node = parent_node->get_parent();
 					if (next->type() == base_token::t_symbol)
 					{
-						node* new_elem = new node(++id);
-						new_elem->add_parent(tmp_node);
-						tmp_node->add_child(new_elem);
-						node_list.push_back(new_elem);
-						tmp_node = new_elem;
-						continue;
+						if (tmp_node != nullptr)
+						{
+							shared_ptr<node> new_elem(new node(++id));
+							new_elem->add_parent(tmp_node);
+							tmp_node->add_child(new_elem);
+							node_list.push_back(new_elem);
+							tmp_node = new_elem;
+							continue;
+						}
+						else
+						{
+							parse_error("End of file (should have only 1 root element)", "another root element", next->get_pos());
+						}
 					}
 					else if (next->type() == base_token::t_punctuation)
 					{
@@ -613,12 +632,19 @@ void token_parser::parse()
 				// if next symbol, create new elem
 				if (next->type() == base_token::t_symbol)
 				{
-					node* new_elem = new node(++id);
-					new_elem->add_parent(parent_node);
-					parent_node->add_child(new_elem);
-					node_list.push_back(new_elem);
-					tmp_node = new_elem;
-					continue;
+					if (tmp_node->get_parent() != nullptr)
+					{
+						shared_ptr<node> new_elem(new node(++id));
+						new_elem->add_parent(parent_node);
+						parent_node->add_child(new_elem);
+						node_list.push_back(new_elem);
+						tmp_node = new_elem;
+						continue;
+					}
+					else
+					{
+						parse_error("End of file (should have only 1 root element)", "another root element", next->get_pos());
+					}
 				}
 				else if (next->type() == base_token::t_punctuation)
 				{
@@ -627,6 +653,11 @@ void token_parser::parse()
 						// fine, nothing to do
 						continue;
 					}
+				}
+				else if (next->type() == base_token::t_eof)
+				{
+					// in case node = "value" as root element
+					continue;
 				}
 				parse_error("symbol or }", next->get_value(), next->get_pos());
 				break;
@@ -637,7 +668,7 @@ void token_parser::parse()
 	}
 }
 
-base_token* token_parser::get_next()
+shared_ptr<base_token> token_parser::get_next()
 {
 	if (node_iterator != token_list.end())
 		return (*node_iterator++);
@@ -645,7 +676,7 @@ base_token* token_parser::get_next()
 		return nullptr;
 }
 
-base_token* token_parser::peek_next()
+shared_ptr<base_token> token_parser::peek_next()
 {
 	if ((*node_iterator) != nullptr && std::next(node_iterator, 0) != token_list.end())
 		return (*std::next(node_iterator, 0));
@@ -655,13 +686,13 @@ base_token* token_parser::peek_next()
 
 void token_parser::parse_error(string expected, string got, size_t pos)
 {
-	cout << "At " << pos << ": Expected '" << expected << "', got " << got << " for next token. Exit." << endl;
+	cout << "At " << pos << ": Expected '" << expected << "', got '" << got << "'. Exit." << endl;
 	exit(-1);
 }
 
 // for debug purposes this might be useful
 void token_parser::print_tokens() {
-	list<base_token*>::iterator iterator;
+	list<shared_ptr<base_token> >::iterator iterator;
 	iterator = token_list.begin();
 	while (iterator != token_list.end()) {
 		(*iterator)->print_token();
